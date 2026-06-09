@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="HOP PRESS">
 <title>HOP PRESS — a platform jumper</title>
 <meta name="description" content="A risograph-flavored platform jumper. Hop the inks, dodge the smudges — how high can you climb?">
 <meta property="og:type" content="website">
@@ -31,10 +34,10 @@
     --pop:#FF4D29;
     --sun:#FFB42E;
   }
-  *{ margin:0; padding:0; box-sizing:border-box; }
+  *{ margin:0; padding:0; box-sizing:border-box; touch-action:none; } /* touch-action doesn't inherit — kill zoom everywhere */
   html,body{
     height:100%; overflow:hidden; background:var(--paper);
-    touch-action:none; overscroll-behavior:none;
+    overscroll-behavior:none;
     -webkit-user-select:none; user-select:none;
     -webkit-tap-highlight-color:transparent;
   }
@@ -136,6 +139,14 @@
     #hud{ padding:10px 12px; }
     .hud-chip{ font-size:14px; padding:4px 8px; border-width:2px; box-shadow:3px 3px 0 var(--pop); }
     .controls{ font-size:11px; }
+  }
+
+  /* tablets: bigger, inset touch targets for thumbs gripping the edges */
+  @media (pointer: coarse) and (min-width: 700px){
+    #touch{ padding:0 40px calc(28px + env(safe-area-inset-bottom)); }
+    .tcluster{ gap:20px; }
+    .tbtn{ width:92px; height:92px; font-size:34px; }
+    #btnJump{ width:116px; height:116px; font-size:22px; }
   }
 </style>
 </head>
@@ -240,6 +251,19 @@ addEventListener('pointerdown', e => {
   if (state !== 'play' && !e.target.closest('.tbtn')) pressJump();  // tap anywhere to (re)start
 });
 addEventListener('contextmenu', e => e.preventDefault());
+
+// iPadOS Safari ignores user-scalable=no: block double-tap and pinch zoom at the event level.
+// touchend preventDefault kills the double-tap zoom; our input uses pointer events, which still fire.
+let lastTapEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = performance.now();
+  if (now - lastTapEnd < 400) e.preventDefault();
+  lastTapEnd = now;
+}, { passive: false });
+document.addEventListener('touchmove', e => { if (e.scale !== undefined && e.scale !== 1) e.preventDefault(); }, { passive: false });
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend'])
+  document.addEventListener(ev, e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
 
 const leftHeld  = () => keys['arrowleft'] || keys['a'] || touchLeft;
 const rightHeld = () => keys['arrowright'] || keys['d'] || touchRight;
