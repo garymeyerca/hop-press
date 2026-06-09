@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>HOP PRESS — a platform jumper</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,7 +15,12 @@
     --sun:#FFB42E;
   }
   *{ margin:0; padding:0; box-sizing:border-box; }
-  html,body{ height:100%; overflow:hidden; background:var(--paper); }
+  html,body{
+    height:100%; overflow:hidden; background:var(--paper);
+    touch-action:none; overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
   canvas{ display:block; }
 
   /* paper grain over everything */
@@ -85,6 +90,36 @@
   }
   .score-card small{ display:block; font-size:10px; letter-spacing:.2em; opacity:.7; }
   .score-card .new-best{ color:var(--pop); font-size:12px; letter-spacing:.2em; }
+
+  /* touch controls — shown on coarse-pointer devices only */
+  #touch{
+    position:fixed; left:0; right:0; bottom:0; z-index:46;
+    display:none; justify-content:space-between; align-items:flex-end;
+    padding:0 16px calc(16px + env(safe-area-inset-bottom));
+    pointer-events:none;
+  }
+  @media (pointer: coarse){ #touch{ display:flex; } }
+  .tcluster{ display:flex; gap:14px; }
+  .tbtn{
+    pointer-events:auto; touch-action:none;
+    width:74px; height:74px; border-radius:50%;
+    border:3px solid var(--ink); background:var(--paper);
+    box-shadow:4px 4px 0 var(--pop); opacity:.9;
+    color:var(--ink); font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:28px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .tbtn:active{ transform:translate(2px,2px); box-shadow:2px 2px 0 var(--pop); }
+  #btnJump{
+    width:96px; height:96px; font-size:18px; letter-spacing:.06em;
+    background:var(--pop); color:var(--paper); box-shadow:4px 4px 0 var(--ink);
+  }
+  #btnJump:active{ box-shadow:2px 2px 0 var(--ink); }
+
+  @media (max-width:600px){
+    #hud{ padding:10px 12px; }
+    .hud-chip{ font-size:14px; padding:4px 8px; border-width:2px; box-shadow:3px 3px 0 var(--pop); }
+    .controls{ font-size:11px; }
+  }
 </style>
 </head>
 <body>
@@ -113,6 +148,14 @@
     <div class="new-best hidden" id="newBest">★ NEW BEST ★</div>
   </div>
   <div class="prompt">PRESS SPACE TO REPRINT</div>
+</div>
+
+<div id="touch">
+  <div class="tcluster">
+    <div class="tbtn" id="btnL">◂</div>
+    <div class="tbtn" id="btnR">▸</div>
+  </div>
+  <div class="tbtn" id="btnJump">HOP</div>
 </div>
 
 <div id="vignette"></div>
@@ -161,16 +204,37 @@ addEventListener('keyup', e => {
   keys[e.key.toLowerCase()] = false;
   if (e.key === ' ' || e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') releaseJump();
 });
+// touch buttons — each tracks its own pointer so move + jump work simultaneously
+function bindHold(el, down, up){
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    try { el.setPointerCapture(e.pointerId); } catch(_) {}
+    down();
+  });
+  const end = e => { e.preventDefault(); up(); };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+bindHold(document.getElementById('btnL'), () => touchLeft = true, () => touchLeft = false);
+bindHold(document.getElementById('btnR'), () => touchRight = true, () => touchRight = false);
+bindHold(document.getElementById('btnJump'), pressJump, releaseJump);
+
 addEventListener('pointerdown', e => {
-  if (state !== 'play') { pressJump(); return; }
-  if (e.clientX < W / 3) touchLeft = true;
-  else if (e.clientX > W * 2 / 3) touchRight = true;
-  else pressJump();
+  if (state !== 'play' && !e.target.closest('.tbtn')) pressJump();  // tap anywhere to (re)start
 });
-addEventListener('pointerup', () => { touchLeft = touchRight = false; releaseJump(); });
+addEventListener('contextmenu', e => e.preventDefault());
 
 const leftHeld  = () => keys['arrowleft'] || keys['a'] || touchLeft;
 const rightHeld = () => keys['arrowright'] || keys['d'] || touchRight;
+
+// touch-specific copy on menus
+if (matchMedia('(pointer: coarse)').matches) {
+  document.querySelector('.controls').innerHTML =
+    '<b>◂</b><b>▸</b> move &nbsp;·&nbsp; <b>HOP</b> jump<br>hold HOP to leap higher · edges wrap around';
+  const prompts = document.querySelectorAll('.prompt');
+  prompts[0].textContent = 'TAP TO PLAY';
+  prompts[1].textContent = 'TAP TO REPRINT';
+}
 
 // ---------- state ----------
 let state = 'menu';   // menu | play | dead
